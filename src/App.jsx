@@ -602,7 +602,8 @@ const [users, setUsers] = useState([]);
 const [selected, setSelected] = useState(null);
 const [form, setForm] = useState({ balance: “”, profitIncrement: “”, tradeDurationMins: “”, initialBalance: “” });
 const [saving, setSaving] = useState(false);
-const [tab, setTab] = useState(“users”); // users | chat
+const [saved, setSaved] = useState(false);
+const [tab, setTab] = useState(“controls”);
 
 useEffect(() => {
 const unsub = onSnapshot(collection(db, “users”), (snap) => {
@@ -624,14 +625,15 @@ initialBalance: u.initialBalance || u.balance || “”,
 async function save() {
 if (!selected) return;
 setSaving(true);
-const updates = {
+await updateDoc(doc(db, “users”, selected.id), {
 balance: parseFloat(form.balance) || 0,
 profitIncrement: parseFloat(form.profitIncrement) || 0,
 tradeDurationMins: parseFloat(form.tradeDurationMins) || 0,
 initialBalance: parseFloat(form.initialBalance) || parseFloat(form.balance) || 0,
-};
-await updateDoc(doc(db, “users”, selected.id), updates);
+});
 setSaving(false);
+setSaved(true);
+setTimeout(() => setSaved(false), 2000);
 }
 
 async function toggleTrade() {
@@ -644,131 +646,142 @@ tradeStartTime: newActive ? new Date() : null,
 setSelected((p) => ({ …p, tradeActive: newActive }));
 }
 
+// If a user is selected, show full-screen user detail
+if (selected) {
+return (
+<div style={{ minHeight: “100vh”, background: G.bg, paddingBottom: 40 }}>
+<style>{css}</style>
+<Ticker />
+{/* Header with back button */}
+<div style={{ padding: “14px 16px”, display: “flex”, justifyContent: “space-between”, alignItems: “center”, borderBottom: `1px solid ${G.border}` }}>
+<button onClick={() => setSelected(null)} style={{
+background: G.surface, border: `1px solid ${G.border}`, color: G.text,
+borderRadius: 8, padding: “8px 14px”, fontSize: 13, display: “flex”, alignItems: “center”, gap: 6,
+}}>← Back</button>
+<span style={{ fontFamily: G.display, fontSize: 14, fontWeight: 800, color: G.red }}>ADMIN</span>
+<Btn variant=“ghost” size=“sm” onClick={() => signOut(auth)}>Sign Out</Btn>
+</div>
+
+```
+    <div style={{ padding: "20px 16px", maxWidth: 600, margin: "0 auto" }}>
+      {/* User info */}
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ fontFamily: G.display, fontSize: 22, fontWeight: 800, marginBottom: 2 }}>{selected.fullName}</h2>
+        <p style={{ color: G.muted, fontSize: 12, marginBottom: 16 }}>@{selected.username} · {selected.email}</p>
+        <Btn
+          variant={selected.tradeActive ? "danger" : "primary"}
+          onClick={toggleTrade}
+          style={{ width: "100%", justifyContent: "center" }}
+          size="lg"
+        >
+          {selected.tradeActive ? "⏹  Stop Trade" : "▶  Start Trade"}
+        </Btn>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 20, background: G.surface, borderRadius: 10, padding: 4 }}>
+        {["controls", "chat"].map((t) => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            flex: 1, padding: "12px", borderRadius: 8, fontFamily: G.display, fontWeight: 700, fontSize: 13,
+            background: tab === t ? G.accent : "transparent", color: tab === t ? "#000" : G.muted,
+            border: "none", letterSpacing: ".06em", textTransform: "uppercase",
+          }}>{t}</button>
+        ))}
+      </div>
+
+      {tab === "controls" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {[
+            ["Initial Deposit ($)", "initialBalance", "The starting balance shown to user"],
+            ["Current Balance ($)", "balance", "Live portfolio value"],
+            ["Profit Increment ($)", "profitIncrement", "Amount added every 10 minutes"],
+            ["Trade Duration (mins)", "tradeDurationMins", "How long until trade expires"],
+          ].map(([label, key, hint]) => (
+            <div key={key} style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 12, padding: 16 }}>
+              <p style={{ fontSize: 12, color: G.muted, letterSpacing: ".06em", marginBottom: 8 }}>{label}</p>
+              <input
+                type="number"
+                value={form[key]}
+                onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                style={{ marginBottom: 4, fontSize: 16 }}
+              />
+              <p style={{ fontSize: 11, color: G.muted }}>{hint}</p>
+            </div>
+          ))}
+          <Btn onClick={save} disabled={saving} size="lg" style={{ width: "100%", justifyContent: "center", marginTop: 4 }}>
+            {saving ? <Spinner /> : saved ? "✅ Saved!" : "💾 Save Changes"}
+          </Btn>
+        </div>
+      ) : (
+        <div style={{ height: "60vh", background: G.card, border: `1px solid ${G.border}`, borderRadius: 16, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <AdminChatPanel userId={selected.id} />
+        </div>
+      )}
+    </div>
+  </div>
+);
+```
+
+}
+
+// Default: user list screen
 return (
 <div style={{ minHeight: “100vh”, background: G.bg }}>
-<style>{css + `.admin-grid { display: flex; flex-direction: column; } .user-detail { padding: 20px; } .controls-grid { display: grid; grid-template-columns: 1fr; gap: 16px; } @media (min-width: 768px) { .admin-grid { flex-direction: row; min-height: calc(100vh - 180px); } .user-list { width: 280px; border-right: 1px solid ${G.border}; flex-shrink: 0; } .user-detail { padding: 32px; flex: 1; overflow-y: auto; } .controls-grid { grid-template-columns: 1fr 1fr; } }`}</style>
+<style>{css}</style>
 <Ticker />
 
 ```
   {/* Header */}
-  <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${G.border}` }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <div style={{ width: 30, height: 30, background: G.red, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontSize: 14, color: "#fff", fontFamily: G.display, fontWeight: 800 }}>A</span>
+  <div style={{ padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${G.border}` }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ width: 28, height: 28, background: G.red, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontSize: 13, color: "#fff", fontFamily: G.display, fontWeight: 800 }}>A</span>
       </div>
-      <span style={{ fontFamily: G.display, fontSize: 18, fontWeight: 800 }}>Crypterra <span style={{ color: G.red, fontSize: 12 }}>ADMIN</span></span>
+      <span style={{ fontFamily: G.display, fontSize: 16, fontWeight: 800 }}>Crypterra <span style={{ color: G.red, fontSize: 11 }}>ADMIN</span></span>
     </div>
     <Btn variant="ghost" size="sm" onClick={() => signOut(auth)}>Sign Out</Btn>
   </div>
 
-  {/* Stats Bar */}
+  {/* Stats */}
   <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1, background: G.border }}>
     {[
       ["USERS", users.length, "👥"],
       ["ACTIVE", users.filter((u) => u.tradeActive).length, "📈"],
       ["AUM", "$" + fmt(users.reduce((s, u) => s + (u.balance || 0), 0)), "💰"],
     ].map(([label, val, icon]) => (
-      <div key={label} style={{ background: G.surface, padding: "12px 8px", textAlign: "center" }}>
+      <div key={label} style={{ background: G.surface, padding: "14px 8px", textAlign: "center" }}>
         <p style={{ color: G.muted, fontSize: 10, letterSpacing: ".1em" }}>{label}</p>
-        <p style={{ fontFamily: G.display, fontSize: 16, fontWeight: 800, marginTop: 4 }}>{icon} {val}</p>
+        <p style={{ fontFamily: G.display, fontSize: 18, fontWeight: 800, marginTop: 4 }}>{icon} {val}</p>
       </div>
     ))}
   </div>
 
-  <div className="admin-grid">
-    {/* User List */}
-    <div className="user-list" style={{ borderBottom: `1px solid ${G.border}` }}>
-      <div style={{ padding: "14px 16px", borderBottom: `1px solid ${G.border}` }}>
-        <p style={{ fontFamily: G.display, fontWeight: 700, fontSize: 12, letterSpacing: ".06em", color: G.muted }}>ALL USERS</p>
+  {/* User List */}
+  <div style={{ padding: "16px" }}>
+    <p style={{ fontFamily: G.display, fontWeight: 700, fontSize: 12, letterSpacing: ".08em", color: G.muted, marginBottom: 12 }}>ALL USERS</p>
+    {users.length === 0 && (
+      <p style={{ color: G.muted, fontSize: 13, textAlign: "center", padding: "40px 0" }}>No users yet</p>
+    )}
+    {users.map((u) => (
+      <div key={u.id} onClick={() => { selectUser(u); setTab("controls"); }} style={{
+        background: G.card, border: `1px solid ${G.border}`, borderRadius: 12,
+        padding: "16px", marginBottom: 12, cursor: "pointer",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <p style={{ fontSize: 15, fontWeight: 700, marginBottom: 2 }}>{u.fullName}</p>
+            <p style={{ fontSize: 12, color: G.muted }}>@{u.username} · {u.email}</p>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <p style={{ fontSize: 15, color: G.accent, fontWeight: 700 }}>${fmt(u.balance)}</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end", marginTop: 4 }}>
+              <div style={{ width: 7, height: 7, borderRadius: "50%", background: u.tradeActive ? G.accent : G.muted }} className={u.tradeActive ? "pulse" : ""} />
+              <span style={{ fontSize: 11, color: G.muted }}>{u.tradeActive ? "live" : "idle"}</span>
+            </div>
+          </div>
+        </div>
       </div>
-      {users.length === 0 && (
-        <p style={{ color: G.muted, fontSize: 13, padding: 20, textAlign: "center" }}>No users yet</p>
-      )}
-      {users.map((u) => (
-        <div key={u.id} onClick={() => { selectUser(u); setTab("controls"); }} style={{
-          padding: "12px 16px", borderBottom: `1px solid ${G.border}`, cursor: "pointer",
-          background: selected?.id === u.id ? G.accentDim : "transparent",
-          transition: "background .15s",
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <p style={{ fontSize: 13, fontWeight: 600 }}>{u.username || u.fullName}</p>
-              <p style={{ fontSize: 11, color: G.muted }}>{u.email}</p>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <p style={{ fontSize: 12, color: G.accent, fontWeight: 700 }}>${fmt(u.balance)}</p>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: u.tradeActive ? G.accent : G.muted }} />
-                <span style={{ fontSize: 10, color: G.muted }}>{u.tradeActive ? "live" : "idle"}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-
-    {/* User Detail */}
-    <div className="user-detail">
-      {!selected ? (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 0", flexDirection: "column", gap: 16 }}>
-          <p style={{ fontSize: 40 }}>👆</p>
-          <p style={{ color: G.muted, fontSize: 14, textAlign: "center" }}>Tap a user above to manage their account</p>
-        </div>
-      ) : (
-        <div className="fade-in">
-          {/* User Header */}
-          <div style={{ marginBottom: 20 }}>
-            <h2 style={{ fontFamily: G.display, fontSize: 20, fontWeight: 800, marginBottom: 4 }}>{selected.fullName}</h2>
-            <p style={{ color: G.muted, fontSize: 12, marginBottom: 14 }}>@{selected.username} · {selected.email}</p>
-            <Btn variant={selected.tradeActive ? "danger" : "primary"} onClick={toggleTrade} style={{ width: "100%", justifyContent: "center" }}>
-              {selected.tradeActive ? "⏹ Stop Trade" : "▶ Start Trade"}
-            </Btn>
-          </div>
-
-          {/* Tabs */}
-          <div style={{ display: "flex", gap: 4, marginBottom: 20, background: G.surface, borderRadius: 10, padding: 4 }}>
-            {["controls", "chat"].map((t) => (
-              <button key={t} onClick={() => setTab(t)} style={{
-                flex: 1, padding: "10px", borderRadius: 8, fontFamily: G.display, fontWeight: 700, fontSize: 12,
-                background: tab === t ? G.accent : "transparent", color: tab === t ? "#000" : G.muted, border: "none",
-                letterSpacing: ".06em", textTransform: "uppercase",
-              }}>{t}</button>
-            ))}
-          </div>
-
-          {tab === "controls" ? (
-            <div className="controls-grid">
-              {[
-                ["Initial Deposit ($)", "initialBalance", "Starting balance"],
-                ["Current Balance ($)", "balance", "Live portfolio value"],
-                ["Profit Increment ($)", "profitIncrement", "Added every 10 minutes"],
-                ["Trade Duration (mins)", "tradeDurationMins", "How long until trade expires"],
-              ].map(([label, key, hint]) => (
-                <Card key={key} style={{ padding: 16 }}>
-                  <p style={{ fontSize: 11, color: G.muted, letterSpacing: ".08em", marginBottom: 8 }}>{label}</p>
-                  <input
-                    type="number"
-                    value={form[key]}
-                    onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                    style={{ marginBottom: 6 }}
-                  />
-                  <p style={{ fontSize: 10, color: G.muted }}>{hint}</p>
-                </Card>
-              ))}
-              <div style={{ gridColumn: "1 / -1" }}>
-                <Btn onClick={save} disabled={saving} size="lg" style={{ width: "100%", justifyContent: "center" }}>
-                  {saving ? <Spinner /> : "💾 Save Changes"}
-                </Btn>
-              </div>
-            </div>
-          ) : (
-            <div style={{ height: 400, background: G.card, border: `1px solid ${G.border}`, borderRadius: 16, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-              <AdminChatPanel userId={selected.id} />
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+    ))}
   </div>
 </div>
 ```
